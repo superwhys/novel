@@ -1,5 +1,6 @@
 {
   "server": {
-    "addr": "0.0.0.0:28280"
+    "addr": "0.0.0.0:28280",
+    "contentDir": "docs/story/content"
   }
 }

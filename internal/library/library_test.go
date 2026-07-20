@@ -1,6 +1,8 @@
 package library
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 )
@@ -30,5 +32,19 @@ func TestLoadSortsAndParsesChapters(t *testing.T) {
 func TestLoadRejectsMissingChapterFiles(t *testing.T) {
 	if _, err := Load(fstest.MapFS{}); err == nil {
 		t.Fatal("Load() error = nil, want error")
+	}
+}
+
+func TestLoadNovelContentFromDirectory(t *testing.T) {
+	contentDir := filepath.Join("..", "..", "docs", "story", "content")
+	lib, err := Load(os.DirFS(contentDir))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got := lib.Novel().ChapterCount; got != 8 {
+		t.Fatalf("ChapterCount = %d, want 8", got)
+	}
+	if chapter, ok := lib.Chapter(1); !ok || chapter.ShortTitle != "梦想" {
+		t.Fatalf("first chapter = %#v, exists = %v", chapter, ok)
 	}
 }

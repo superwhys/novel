@@ -49,7 +49,7 @@ type Library struct {
 func Load(contentFS fs.FS) (*Library, error) {
 	entries, err := fs.ReadDir(contentFS, ".")
 	if err != nil {
-		return nil, fmt.Errorf("读取嵌入小说内容: %w", err)
+		return nil, fmt.Errorf("读取小说内容目录: %w", err)
 	}
 
 	type candidate struct {
@@ -69,7 +69,7 @@ func Load(contentFS fs.FS) (*Library, error) {
 		candidates = append(candidates, candidate{number: number, name: entry.Name()})
 	}
 	if len(candidates) == 0 {
-		return nil, fmt.Errorf("嵌入内容中没有找到数字命名的章节文件")
+		return nil, fmt.Errorf("小说内容目录中没有找到数字命名的章节文件")
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].number < candidates[j].number })
 
