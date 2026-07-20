@@ -1,0 +1,42 @@
+[Unit]
+Description=Novel Backend Service
+Documentation=file:/opt/novel/README_WEB.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=novel
+Group=novel
+WorkingDirectory=/opt/novel
+ExecStart=/opt/novel/novel -f /opt/novel/config.json
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=15s
+KillSignal=SIGTERM
+
+Environment=TZ=Asia/Shanghai
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=novel
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
+
