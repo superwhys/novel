@@ -8,7 +8,7 @@
 
 判断语言和叙事风格时，按以下优先级执行：
 
-1. 原稿第 1、6、7 章，即 `content/1.txt`、`content/6.txt`、`content/7.txt`（以上路径均相对于本文件所在的 `docs/story/` 目录）。
+1. 原稿第 1、6、7 章，即 `content/1.txt`、`content/6.txt`、`content/7.txt`。
 2. `OUTLINE.md` 中的人物设定、小说大纲和章节框架。
 3. 后续新增章节的既有剧情连续性。
 
