@@ -14,7 +14,7 @@ RELEASE_NAME := $(APP_NAME)-$(VERSION)-linux-amd64
 RELEASE_DIR := $(DIST_DIR)/$(RELEASE_NAME)
 RELEASE_ARCHIVE := $(DIST_DIR)/$(RELEASE_NAME).tar.gz
 
-.PHONY: all build frontend frontend-deps backend package clean help
+.PHONY: all build frontend frontend-deps backend package deploy clean help
 
 all: build
 
@@ -41,6 +41,9 @@ package: build ## 构建并打包前后端，生成 dist/*.tar.gz
 	COPYFILE_DISABLE=1 tar --no-xattrs -C "$(DIST_DIR)" -czf "$(RELEASE_ARCHIVE)" "$(RELEASE_NAME)"
 	rm -rf "$(RELEASE_DIR)"
 	@echo "发布包已生成：$(RELEASE_ARCHIVE)"
+
+deploy: ## 部署后端和 Nginx 前端到 ali-prod
+	bash scripts/deploy.sh "$(VERSION)"
 
 clean: ## 清理所有构建产物
 	rm -rf "$(BUILD_DIR)" "$(DIST_DIR)" "$(FRONTEND_DIR)/dist"
