@@ -22,9 +22,6 @@ const theme = ref(localStorage.getItem('novel:theme') || 'paper')
 const siteShell = ref(null)
 const homeEntry = ref(null)
 const activeMemoryPage = ref(0)
-const prologueComplete = ref(false)
-const homeScrollLocked = ref(false)
-let homeScrollUnlockTimer
 let previewTrigger = null
 let bodyOverflowBeforePreview = ''
 
@@ -107,45 +104,10 @@ function reloadPage() {
 
 function updateMemoryPage() {
   if (!siteShell.value) return
-  if (prologueComplete.value && homeScrollLocked.value) {
-    siteShell.value.scrollTop = 0
-    return
-  }
   activeMemoryPage.value = Math.min(
     memorySlides.length,
     Math.max(0, Math.round(siteShell.value.scrollTop / siteShell.value.clientHeight)),
   )
-  if (
-    !prologueComplete.value &&
-    homeEntry.value &&
-    siteShell.value.scrollTop >= homeEntry.value.offsetTop - 2
-  ) {
-    finishPrologue()
-  }
-}
-
-function scheduleHomeScrollUnlock(delay = 350) {
-  window.clearTimeout(homeScrollUnlockTimer)
-  homeScrollUnlockTimer = window.setTimeout(() => {
-    homeScrollLocked.value = false
-  }, delay)
-}
-
-function guardHomeScroll(event) {
-  if (!homeScrollLocked.value) return
-  if (event.cancelable) event.preventDefault()
-  if (siteShell.value) siteShell.value.scrollTop = 0
-  scheduleHomeScrollUnlock()
-}
-
-async function finishPrologue() {
-  if (prologueComplete.value) return
-  homeScrollLocked.value = true
-  prologueComplete.value = true
-  activeMemoryPage.value = memorySlides.length
-  await nextTick()
-  if (siteShell.value) siteShell.value.scrollTop = 0
-  scheduleHomeScrollUnlock(800)
 }
 
 function scrollToHome() {
@@ -301,7 +263,12 @@ function closeReader(updateHistory = true) {
   memoryMoments.value = []
   directoryOpen.value = false
   if (updateHistory) window.history.pushState({}, '', window.location.pathname)
-  nextTick(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+  nextTick(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+    if (!siteShell.value || !homeEntry.value) return
+    siteShell.value.scrollTop = homeEntry.value.offsetTop
+    activeMemoryPage.value = memorySlides.length
+  })
 }
 
 function syncFromLocation() {
@@ -355,7 +322,6 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  window.clearTimeout(homeScrollUnlockTimer)
   if (previewImage.value) document.body.style.overflow = bodyOverflowBeforePreview
   window.removeEventListener('scroll', updateProgress)
   window.removeEventListener('popstate', syncFromLocation)
@@ -378,25 +344,21 @@ onBeforeUnmount(() => {
 
   <main
     v-else-if="!activeChapter"
-    :key="prologueComplete ? 'home-shell' : 'prologue-shell'"
     ref="siteShell"
     class="site-shell"
     @scroll.passive="updateMemoryPage"
-    @wheel="guardHomeScroll"
-    @touchmove="guardHomeScroll"
   >
-    <template v-if="!prologueComplete">
-      <section
-        v-for="(slide, index) in memorySlides"
-        :key="slide.kicker"
-        :id="`memory-${index + 1}`"
-        :class="[
-          'memory-page',
-          `memory-page--${slide.variant}`,
-          { 'is-active': activeMemoryPage === index },
-        ]"
-        :aria-label="`回忆序章第 ${index + 1} 页，共 ${memorySlides.length} 页`"
-      >
+    <section
+      v-for="(slide, index) in memorySlides"
+      :key="slide.kicker"
+      :id="`memory-${index + 1}`"
+      :class="[
+        'memory-page',
+        `memory-page--${slide.variant}`,
+        { 'is-active': activeMemoryPage === index },
+      ]"
+      :aria-label="`回忆序章第 ${index + 1} 页，共 ${memorySlides.length} 页`"
+    >
       <div class="memory-grain" aria-hidden="true"></div>
       <div class="memory-court" aria-hidden="true"><span></span><i></i></div>
 
@@ -456,8 +418,7 @@ onBeforeUnmount(() => {
           </div>
           <p>{{ index === memorySlides.length - 1 ? '再向上滑，翻开故事' : '向上滑，继续回忆' }} <i>⌄</i></p>
         </div>
-      </section>
-    </template>
+    </section>
 
     <div ref="homeEntry" class="home-entry">
       <nav class="top-nav" aria-label="主导航">
