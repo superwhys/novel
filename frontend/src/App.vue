@@ -4,7 +4,9 @@ import { fetchChapter, fetchNovel } from './api'
 
 const novel = ref(null)
 const chapters = ref([])
+const memoryImages = ref([])
 const activeChapter = ref(null)
+const memoryMoment = ref(null)
 const loading = ref(true)
 const chapterLoading = ref(false)
 const error = ref('')
@@ -48,6 +50,31 @@ function reloadPage() {
   window.location.reload()
 }
 
+function randomInteger(maxExclusive) {
+  if (maxExclusive <= 1) return 0
+  if (globalThis.crypto?.getRandomValues) {
+    const value = new Uint32Array(1)
+    globalThis.crypto.getRandomValues(value)
+    return value[0] % maxExclusive
+  }
+  return Math.floor(Math.random() * maxExclusive)
+}
+
+function chooseMemoryMoment(chapter) {
+  const paragraphCount = chapter.content
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean).length
+  if (!memoryImages.value.length || paragraphCount === 0) return null
+
+  const firstPosition = paragraphCount < 3 ? 0 : Math.max(1, Math.floor(paragraphCount * 0.25))
+  const lastPosition = Math.max(firstPosition, Math.min(paragraphCount - 2, Math.ceil(paragraphCount * 0.75)))
+  return {
+    image: memoryImages.value[randomInteger(memoryImages.value.length)],
+    insertAfter: firstPosition + randomInteger(lastPosition - firstPosition + 1),
+  }
+}
+
 async function loadChapter(id, updateHistory = true) {
   if (!id || chapterLoading.value) return
   chapterLoading.value = true
@@ -56,6 +83,7 @@ async function loadChapter(id, updateHistory = true) {
   try {
     const payload = await fetchChapter(id)
     activeChapter.value = payload.chapter
+    memoryMoment.value = chooseMemoryMoment(payload.chapter)
     lastChapterID.value = id
     localStorage.setItem('novel:lastChapter', String(id))
     if (updateHistory && window.location.hash !== `#chapter-${id}`) {
@@ -73,6 +101,7 @@ async function loadChapter(id, updateHistory = true) {
 
 function closeReader(updateHistory = true) {
   activeChapter.value = null
+  memoryMoment.value = null
   directoryOpen.value = false
   if (updateHistory) window.history.pushState({}, '', window.location.pathname)
   nextTick(() => window.scrollTo({ top: 0, behavior: 'instant' }))
@@ -113,6 +142,7 @@ onMounted(async () => {
     const payload = await fetchNovel()
     novel.value = payload.novel
     chapters.value = payload.chapters
+    memoryImages.value = payload.memoryImages || []
     syncFromLocation()
   } catch (err) {
     error.value = err.message
@@ -281,7 +311,19 @@ onBeforeUnmount(() => {
       <h1>{{ activeChapter.shortTitle }}</h1>
       <div class="title-rule"><span></span></div>
       <div class="article-content">
-        <p v-for="(paragraph, index) in contentParagraphs" :key="index">{{ paragraph }}</p>
+        <template v-for="(paragraph, index) in contentParagraphs" :key="index">
+          <p>{{ paragraph }}</p>
+          <figure v-if="memoryMoment?.insertAfter === index" class="memory-photo">
+            <img
+              :src="memoryMoment.image.url"
+              alt="少年时期的篮球回忆照片"
+              loading="lazy"
+              decoding="async"
+              @load="updateProgress"
+            />
+            <figcaption><span>MEMORY</span> 那年球场边的我们</figcaption>
+          </figure>
+        </template>
       </div>
       <div class="chapter-end">
         <span>END OF CHAPTER {{ String(activeChapter.number).padStart(2, '0') }}</span>

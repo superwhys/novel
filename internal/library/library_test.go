@@ -41,8 +41,8 @@ func TestLoadNovelContentFromDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if got := lib.Novel().ChapterCount; got != 8 {
-		t.Fatalf("ChapterCount = %d, want 8", got)
+	if got := lib.Novel().ChapterCount; got != 10 {
+		t.Fatalf("ChapterCount = %d, want 10", got)
 	}
 	if chapter, ok := lib.Chapter(1); !ok || chapter.ShortTitle != "梦想" {
 		t.Fatalf("first chapter = %#v, exists = %v", chapter, ok)

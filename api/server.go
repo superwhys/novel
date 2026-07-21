@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/miebyte/goutils/logging"
 
 	"github.com/superwhys/novel/internal/library"
+	"github.com/superwhys/novel/internal/memories"
 )
 
 type API struct {
@@ -28,6 +30,7 @@ func (a *API) routes() {
 	a.mux.HandleFunc("GET /novel", a.novel)
 	a.mux.HandleFunc("GET /chapters", a.chapters)
 	a.mux.HandleFunc("GET /chapters/{id}", a.chapter)
+	a.mux.HandleFunc("GET /memories/{id}", a.memoryImage)
 }
 
 func (a *API) health(w http.ResponseWriter, _ *http.Request) {
@@ -36,9 +39,10 @@ func (a *API) health(w http.ResponseWriter, _ *http.Request) {
 
 func (a *API) novel(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
-		Novel    library.Novel            `json:"novel"`
-		Chapters []library.ChapterSummary `json:"chapters"`
-	}{a.library.Novel(), a.library.Chapters()})
+		Novel        library.Novel            `json:"novel"`
+		Chapters     []library.ChapterSummary `json:"chapters"`
+		MemoryImages []memories.Image         `json:"memoryImages"`
+	}{a.library.Novel(), a.library.Chapters(), memories.Images("/api")})
 }
 
 func (a *API) chapters(w http.ResponseWriter, _ *http.Request) {
@@ -57,6 +61,23 @@ func (a *API) chapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"chapter": chapter})
+}
+
+func (a *API) memoryImage(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id < 1 {
+		writeError(w, http.StatusBadRequest, "无效的图片编号")
+		return
+	}
+	asset, ok := memories.Read(id)
+	if !ok {
+		writeError(w, http.StatusNotFound, "图片不存在")
+		return
+	}
+
+	w.Header().Set("Content-Type", asset.ContentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(asset.Data))
 }
 
 func (a *API) withMiddleware(next http.Handler) http.Handler {

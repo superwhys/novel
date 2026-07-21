@@ -5,6 +5,7 @@
 ## 仓库目录
 
 - `docs/story/content/`：小说章节正文；后端在运行时从该目录读取，不会编译进二进制文件。
+- `internal/memories/images/`：阅读时穿插展示的回忆照片；会通过 Go Embed 编译进后端二进制文件。
 - `docs/story/`：集中存放小说正文、大纲、人物档案、故事设定与续写规范。
 - `api/`、`internal/`：后端服务代码。
 - `frontend/`：网页阅读界面。
@@ -19,3 +20,7 @@
 ## 运行配置
 
 `config.json` 中的 `server.contentDir` 用于指定小说章节目录，默认值为 `docs/story/content`。目录中的数字命名文本文件（如 `1.txt`）会在服务启动时读取。
+
+## 回忆照片
+
+将 JPG、PNG、WebP、GIF 或 AVIF 图片放入 `internal/memories/images/`，再执行 `make backend` 或 `make build`。构建出的后端二进制已经包含这些图片，运行时不需要额外携带图片目录。阅读器每次打开章节时会随机选择一张，并插入正文中段。
