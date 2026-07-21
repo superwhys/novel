@@ -17,6 +17,48 @@ const lastChapterID = ref(Number(localStorage.getItem('novel:lastChapter')) || 0
 const fontSize = ref(Number(localStorage.getItem('novel:fontSize')) || 19)
 const lineHeight = ref(Number(localStorage.getItem('novel:lineHeight')) || 2)
 const theme = ref(localStorage.getItem('novel:theme') || 'paper')
+const siteShell = ref(null)
+const homeEntry = ref(null)
+const activeMemoryPage = ref(0)
+
+const memorySlides = [
+  {
+    kicker: 'PROLOGUE 01 · 落球声',
+    year: '2014',
+    title: ['回忆总是', '先有声音。'],
+    body: '一声篮球落地，穿过午后的蝉鸣。我们循着声音跑向球场，以为那只是一个普通的夏天。',
+    quote: '后来才明白，有些故事从第一次传球时，就已经写下了开头。',
+    caption: '篮球落地的声音，最先叫醒那个夏天',
+    variant: 'opening',
+  },
+  {
+    kicker: 'PROLOGUE 02 · 放学以后',
+    year: '17:42',
+    title: ['那时的黄昏，', '好像永远不会结束。'],
+    body: '书包被丢在篮架下，校服换成球衣。风从树梢吹过，夕阳把每个人的影子拉得很长。',
+    quote: '我们记不清那天的比分，却一直记得谁在最后一球时喊了自己的名字。',
+    caption: '放学后的风，把黄昏吹得很慢',
+    variant: 'after-school',
+  },
+  {
+    kicker: 'PROLOGUE 03 · 少年并肩',
+    year: '我们',
+    title: ['输赢很大，', '明天很远。'],
+    body: '那时相信，只要跑得够快、跳得够高，就能追上所有想去的地方。受过的伤，睡一觉就会好。',
+    quote: '青春不是赢下了多少场，而是输掉以后，身边还有人说：明天继续。',
+    caption: '一记传球，从一个少年飞向另一个少年',
+    variant: 'together',
+  },
+  {
+    kicker: 'PROLOGUE 04 · 后来',
+    year: 'NOW',
+    title: ['我们长大了，', '篮球还在落地。'],
+    body: '球场换了颜色，少年走进各自的人生。可每当熟悉的声音响起，时间还是会折返回那一年。',
+    quote: '故事没有停在合照那天。它被写进往后的每一次重逢，也写进这一页。',
+    caption: '许多年后，篮筐仍在原地等风',
+    variant: 'return',
+  },
+]
 
 const filteredChapters = computed(() => {
   const keyword = query.value.trim().toLowerCase()
@@ -48,6 +90,29 @@ function formatCharacters(value) {
 
 function reloadPage() {
   window.location.reload()
+}
+
+function updateMemoryPage() {
+  if (!siteShell.value) return
+  activeMemoryPage.value = Math.min(
+    memorySlides.length,
+    Math.max(0, Math.round(siteShell.value.scrollTop / siteShell.value.clientHeight)),
+  )
+}
+
+function scrollToHome() {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  homeEntry.value?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+}
+
+function syncPrologueAnchor() {
+  const anchorID = window.location.hash.slice(1)
+  if (!anchorID || anchorID.startsWith('chapter-') || !siteShell.value) return
+  const anchor = document.getElementById(anchorID)
+  if (!anchor) return
+  const shellTop = siteShell.value.getBoundingClientRect().top
+  siteShell.value.scrollTop += anchor.getBoundingClientRect().top - shellTop
+  updateMemoryPage()
 }
 
 function randomInteger(maxExclusive) {
@@ -149,6 +214,8 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  await nextTick()
+  syncPrologueAnchor()
   window.addEventListener('scroll', updateProgress, { passive: true })
   window.addEventListener('popstate', syncFromLocation)
 })
@@ -172,8 +239,86 @@ onBeforeUnmount(() => {
     <button class="button button-primary" @click="reloadPage">重新加载</button>
   </div>
 
-  <main v-else-if="!activeChapter" class="site-shell">
-    <nav class="top-nav" aria-label="主导航">
+  <main
+    v-else-if="!activeChapter"
+    ref="siteShell"
+    class="site-shell"
+    @scroll.passive="updateMemoryPage"
+  >
+    <section
+      v-for="(slide, index) in memorySlides"
+      :key="slide.kicker"
+      :id="`memory-${index + 1}`"
+      :class="[
+        'memory-page',
+        `memory-page--${slide.variant}`,
+        { 'is-active': activeMemoryPage === index },
+      ]"
+      :aria-label="`回忆序章第 ${index + 1} 页，共 ${memorySlides.length} 页`"
+    >
+      <div class="memory-grain" aria-hidden="true"></div>
+      <div class="memory-court" aria-hidden="true"><span></span><i></i></div>
+
+      <button class="memory-skip" type="button" @click="scrollToHome">
+        跳过序章 <span aria-hidden="true">↘</span>
+      </button>
+
+      <div class="memory-copy">
+        <p class="memory-kicker">{{ slide.kicker }}</p>
+        <p class="memory-year" aria-hidden="true">{{ slide.year }}</p>
+        <h1>{{ slide.title[0] }}<br /><em>{{ slide.title[1] }}</em></h1>
+        <p class="memory-body">{{ slide.body }}</p>
+        <blockquote class="memory-quote">{{ slide.quote }}</blockquote>
+      </div>
+
+      <div :class="['memory-illustration', `memory-illustration--${slide.variant}`]" aria-hidden="true">
+        <div class="scene-sky">
+          <span class="scene-sun"></span>
+          <span class="scene-cloud scene-cloud--one"><i></i></span>
+          <span class="scene-cloud scene-cloud--two"><i></i></span>
+        </div>
+        <div class="scene-school">
+          <i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <div class="scene-ground"></div>
+        <div class="scene-lamp"><i></i></div>
+        <div class="scene-hoop">
+          <span class="scene-pole"></span>
+          <span class="scene-board"></span>
+          <span class="scene-rim"></span>
+          <span class="scene-net"></span>
+        </div>
+        <div class="scene-player scene-player--a">
+          <span class="scene-head"></span><span class="scene-body"></span>
+          <span class="scene-arm scene-arm--left"></span><span class="scene-arm scene-arm--right"></span>
+          <span class="scene-leg scene-leg--left"></span><span class="scene-leg scene-leg--right"></span>
+        </div>
+        <div class="scene-player scene-player--b">
+          <span class="scene-head"></span><span class="scene-body"></span>
+          <span class="scene-arm scene-arm--left"></span><span class="scene-arm scene-arm--right"></span>
+          <span class="scene-leg scene-leg--left"></span><span class="scene-leg scene-leg--right"></span>
+        </div>
+        <div class="scene-ball"><span></span><i></i></div>
+        <span class="scene-sound scene-sound--one"></span>
+        <span class="scene-sound scene-sound--two"></span>
+        <span class="scene-sound scene-sound--three"></span>
+        <p><span>{{ String(index + 1).padStart(2, '0') }} / {{ String(memorySlides.length).padStart(2, '0') }}</span>{{ slide.caption }}</p>
+      </div>
+
+      <div class="memory-page-footer">
+        <div class="memory-dots" aria-hidden="true">
+          <span
+            v-for="(_, dotIndex) in memorySlides"
+            :key="dotIndex"
+            :class="{ active: dotIndex === index }"
+          ></span>
+        </div>
+        <p>{{ index === memorySlides.length - 1 ? '再向上滑，翻开故事' : '向上滑，继续回忆' }} <i>⌄</i></p>
+      </div>
+    </section>
+
+    <div ref="homeEntry" class="home-entry">
+      <nav class="top-nav" aria-label="主导航">
       <a href="#top" class="brand" aria-label="回到首页">
         <span class="brand-mark">距</span>
         <span>我与篮球的距离</span>
@@ -185,7 +330,7 @@ onBeforeUnmount(() => {
           继续阅读
         </button>
       </div>
-    </nav>
+      </nav>
 
     <section id="top" class="hero">
       <div class="court-lines" aria-hidden="true">
@@ -274,11 +419,12 @@ onBeforeUnmount(() => {
       <p v-if="!filteredChapters.length" class="empty-result">没有找到相关章节，换个关键词试试。</p>
     </section>
 
-    <footer class="site-footer">
-      <span class="footer-mark">距</span>
-      <div><strong>我与篮球的距离</strong><p>献给那些在球场上挥洒过汗水的少年。</p></div>
-      <a href="#top">回到顶部 ↑</a>
-    </footer>
+      <footer class="site-footer">
+        <span class="footer-mark">距</span>
+        <div><strong>我与篮球的距离</strong><p>献给那些在球场上挥洒过汗水的少年。</p></div>
+        <a href="#top">回到顶部 ↑</a>
+      </footer>
+    </div>
   </main>
 
   <main v-else :class="['reader-shell', `theme-${theme}`]">
