@@ -20,6 +20,7 @@ const theme = ref(localStorage.getItem('novel:theme') || 'paper')
 const siteShell = ref(null)
 const homeEntry = ref(null)
 const activeMemoryPage = ref(0)
+const prologueComplete = ref(false)
 
 const memorySlides = [
   {
@@ -98,6 +99,31 @@ function updateMemoryPage() {
     memorySlides.length,
     Math.max(0, Math.round(siteShell.value.scrollTop / siteShell.value.clientHeight)),
   )
+  if (
+    !prologueComplete.value &&
+    homeEntry.value &&
+    siteShell.value.scrollTop >= homeEntry.value.offsetTop - 2
+  ) {
+    finishPrologue()
+  }
+}
+
+async function finishPrologue() {
+  if (prologueComplete.value) return
+  const shell = siteShell.value
+  if (shell) {
+    shell.style.scrollSnapType = 'none'
+    shell.scrollTop = 0
+  }
+  prologueComplete.value = true
+  activeMemoryPage.value = memorySlides.length
+  await nextTick()
+  if (!shell) return
+  shell.scrollTop = 0
+  requestAnimationFrame(() => {
+    shell.scrollTop = 0
+    shell.style.removeProperty('scroll-snap-type')
+  })
 }
 
 function scrollToHome() {
@@ -245,17 +271,18 @@ onBeforeUnmount(() => {
     class="site-shell"
     @scroll.passive="updateMemoryPage"
   >
-    <section
-      v-for="(slide, index) in memorySlides"
-      :key="slide.kicker"
-      :id="`memory-${index + 1}`"
-      :class="[
-        'memory-page',
-        `memory-page--${slide.variant}`,
-        { 'is-active': activeMemoryPage === index },
-      ]"
-      :aria-label="`回忆序章第 ${index + 1} 页，共 ${memorySlides.length} 页`"
-    >
+    <template v-if="!prologueComplete">
+      <section
+        v-for="(slide, index) in memorySlides"
+        :key="slide.kicker"
+        :id="`memory-${index + 1}`"
+        :class="[
+          'memory-page',
+          `memory-page--${slide.variant}`,
+          { 'is-active': activeMemoryPage === index },
+        ]"
+        :aria-label="`回忆序章第 ${index + 1} 页，共 ${memorySlides.length} 页`"
+      >
       <div class="memory-grain" aria-hidden="true"></div>
       <div class="memory-court" aria-hidden="true"><span></span><i></i></div>
 
@@ -305,17 +332,18 @@ onBeforeUnmount(() => {
         <p><span>{{ String(index + 1).padStart(2, '0') }} / {{ String(memorySlides.length).padStart(2, '0') }}</span>{{ slide.caption }}</p>
       </div>
 
-      <div class="memory-page-footer">
-        <div class="memory-dots" aria-hidden="true">
-          <span
-            v-for="(_, dotIndex) in memorySlides"
-            :key="dotIndex"
-            :class="{ active: dotIndex === index }"
-          ></span>
+        <div class="memory-page-footer">
+          <div class="memory-dots" aria-hidden="true">
+            <span
+              v-for="(_, dotIndex) in memorySlides"
+              :key="dotIndex"
+              :class="{ active: dotIndex === index }"
+            ></span>
+          </div>
+          <p>{{ index === memorySlides.length - 1 ? '再向上滑，翻开故事' : '向上滑，继续回忆' }} <i>⌄</i></p>
         </div>
-        <p>{{ index === memorySlides.length - 1 ? '再向上滑，翻开故事' : '向上滑，继续回忆' }} <i>⌄</i></p>
-      </div>
-    </section>
+      </section>
+    </template>
 
     <div ref="homeEntry" class="home-entry">
       <nav class="top-nav" aria-label="主导航">
