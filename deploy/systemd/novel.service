@@ -1,13 +1,12 @@
 [Unit]
 Description=Novel Backend Service
-Documentation=file:/opt/novel/README_WEB.md
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=simple
-User=novel
-Group=novel
+User=root
+Group=root
 WorkingDirectory=/opt/novel
 ExecStart=/opt/novel/novel -f /opt/novel/config.json
 

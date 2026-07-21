@@ -90,7 +90,7 @@ func Load(contentFS fs.FS) (*Library, error) {
 	lib.novel = Novel{
 		Title:        "我与篮球的距离",
 		Subtitle:     "一群少年，在球场上寻找梦想与自己的距离",
-		Description:  "发生在 2014 年深圳光明新区公明一带的校园篮球故事。热血、友情、失落与成长，都从一次传球开始。",
+		Description:  "发生在 2014 年深圳光明新区公明中学的校园篮球故事。热血、友情、失落与成长，都从一次传球开始。",
 		Genre:        "校园 · 篮球 · 青春",
 		Era:          "2014 · 深圳公明",
 		ChapterCount: len(lib.chapters),
