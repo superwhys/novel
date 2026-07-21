@@ -6,7 +6,9 @@ const novel = ref(null)
 const chapters = ref([])
 const memoryImages = ref([])
 const activeChapter = ref(null)
-const memoryMoment = ref(null)
+const memoryMoments = ref([])
+const previewImage = ref(null)
+const previewCloseButton = ref(null)
 const loading = ref(true)
 const chapterLoading = ref(false)
 const error = ref('')
@@ -21,6 +23,10 @@ const siteShell = ref(null)
 const homeEntry = ref(null)
 const activeMemoryPage = ref(0)
 const prologueComplete = ref(false)
+const homeScrollLocked = ref(false)
+let homeScrollUnlockTimer
+let previewTrigger = null
+let bodyOverflowBeforePreview = ''
 
 const memorySlides = [
   {
@@ -76,6 +82,10 @@ const contentParagraphs = computed(() =>
     .filter(Boolean) || [],
 )
 
+const memoryMomentsByPosition = computed(() =>
+  Object.fromEntries(memoryMoments.value.map((moment) => [moment.insertAfter, moment])),
+)
+
 const currentIndex = computed(() =>
   chapters.value.findIndex((chapter) => chapter.id === activeChapter.value?.id),
 )
@@ -95,6 +105,10 @@ function reloadPage() {
 
 function updateMemoryPage() {
   if (!siteShell.value) return
+  if (prologueComplete.value && homeScrollLocked.value) {
+    siteShell.value.scrollTop = 0
+    return
+  }
   activeMemoryPage.value = Math.min(
     memorySlides.length,
     Math.max(0, Math.round(siteShell.value.scrollTop / siteShell.value.clientHeight)),
@@ -108,22 +122,28 @@ function updateMemoryPage() {
   }
 }
 
+function scheduleHomeScrollUnlock(delay = 350) {
+  window.clearTimeout(homeScrollUnlockTimer)
+  homeScrollUnlockTimer = window.setTimeout(() => {
+    homeScrollLocked.value = false
+  }, delay)
+}
+
+function guardHomeScroll(event) {
+  if (!homeScrollLocked.value) return
+  if (event.cancelable) event.preventDefault()
+  if (siteShell.value) siteShell.value.scrollTop = 0
+  scheduleHomeScrollUnlock()
+}
+
 async function finishPrologue() {
   if (prologueComplete.value) return
-  const shell = siteShell.value
-  if (shell) {
-    shell.style.scrollSnapType = 'none'
-    shell.scrollTop = 0
-  }
+  homeScrollLocked.value = true
   prologueComplete.value = true
   activeMemoryPage.value = memorySlides.length
   await nextTick()
-  if (!shell) return
-  shell.scrollTop = 0
-  requestAnimationFrame(() => {
-    shell.scrollTop = 0
-    shell.style.removeProperty('scroll-snap-type')
-  })
+  if (siteShell.value) siteShell.value.scrollTop = 0
+  scheduleHomeScrollUnlock(800)
 }
 
 function scrollToHome() {
@@ -151,19 +171,54 @@ function randomInteger(maxExclusive) {
   return Math.floor(Math.random() * maxExclusive)
 }
 
-function chooseMemoryMoment(chapter) {
+function chooseMemoryMoments(chapter) {
   const paragraphCount = chapter.content
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean).length
-  if (!memoryImages.value.length || paragraphCount === 0) return null
+  if (!memoryImages.value.length || paragraphCount === 0) return []
 
-  const firstPosition = paragraphCount < 3 ? 0 : Math.max(1, Math.floor(paragraphCount * 0.25))
-  const lastPosition = Math.max(firstPosition, Math.min(paragraphCount - 2, Math.ceil(paragraphCount * 0.75)))
-  return {
-    image: memoryImages.value[randomInteger(memoryImages.value.length)],
-    insertAfter: firstPosition + randomInteger(lastPosition - firstPosition + 1),
-  }
+  const characterCount = chapter.content.replace(/\s/g, '').length
+  const desiredCount = characterCount >= 4000 ? 3 : characterCount >= 2500 ? 2 : 1
+  const firstPosition = paragraphCount < 3 ? 0 : Math.max(1, Math.floor(paragraphCount * 0.15))
+  const lastPosition = Math.max(firstPosition, Math.min(paragraphCount - 2, Math.ceil(paragraphCount * 0.85)))
+  const positionCount = lastPosition - firstPosition + 1
+  const imageCount = Math.min(desiredCount, memoryImages.value.length, positionCount)
+  const availableImages = [...memoryImages.value]
+
+  return Array.from({ length: imageCount }, (_, slot) => {
+    const slotStart = firstPosition + Math.floor((positionCount * slot) / imageCount)
+    const slotEnd = firstPosition + Math.floor((positionCount * (slot + 1)) / imageCount) - 1
+    const imageIndex = randomInteger(availableImages.length)
+    const [image] = availableImages.splice(imageIndex, 1)
+    return {
+      image,
+      insertAfter: slotStart + randomInteger(slotEnd - slotStart + 1),
+    }
+  })
+}
+
+async function openMemoryPreview(image, event) {
+  previewTrigger = event.currentTarget
+  bodyOverflowBeforePreview = document.body.style.overflow
+  document.body.style.overflow = 'hidden'
+  previewImage.value = image
+  await nextTick()
+  previewCloseButton.value?.focus()
+}
+
+function closeMemoryPreview() {
+  if (!previewImage.value) return
+  previewImage.value = null
+  document.body.style.overflow = bodyOverflowBeforePreview
+  nextTick(() => {
+    previewTrigger?.focus()
+    previewTrigger = null
+  })
+}
+
+function handlePreviewKeydown(event) {
+  if (event.key === 'Escape' && previewImage.value) closeMemoryPreview()
 }
 
 async function loadChapter(id, updateHistory = true) {
@@ -174,7 +229,7 @@ async function loadChapter(id, updateHistory = true) {
   try {
     const payload = await fetchChapter(id)
     activeChapter.value = payload.chapter
-    memoryMoment.value = chooseMemoryMoment(payload.chapter)
+    memoryMoments.value = chooseMemoryMoments(payload.chapter)
     lastChapterID.value = id
     localStorage.setItem('novel:lastChapter', String(id))
     if (updateHistory && window.location.hash !== `#chapter-${id}`) {
@@ -192,7 +247,7 @@ async function loadChapter(id, updateHistory = true) {
 
 function closeReader(updateHistory = true) {
   activeChapter.value = null
-  memoryMoment.value = null
+  memoryMoments.value = []
   directoryOpen.value = false
   if (updateHistory) window.history.pushState({}, '', window.location.pathname)
   nextTick(() => window.scrollTo({ top: 0, behavior: 'instant' }))
@@ -244,11 +299,15 @@ onMounted(async () => {
   syncPrologueAnchor()
   window.addEventListener('scroll', updateProgress, { passive: true })
   window.addEventListener('popstate', syncFromLocation)
+  window.addEventListener('keydown', handlePreviewKeydown)
 })
 
 onBeforeUnmount(() => {
+  window.clearTimeout(homeScrollUnlockTimer)
+  if (previewImage.value) document.body.style.overflow = bodyOverflowBeforePreview
   window.removeEventListener('scroll', updateProgress)
   window.removeEventListener('popstate', syncFromLocation)
+  window.removeEventListener('keydown', handlePreviewKeydown)
 })
 </script>
 
@@ -267,9 +326,12 @@ onBeforeUnmount(() => {
 
   <main
     v-else-if="!activeChapter"
+    :key="prologueComplete ? 'home-shell' : 'prologue-shell'"
     ref="siteShell"
     class="site-shell"
     @scroll.passive="updateMemoryPage"
+    @wheel="guardHomeScroll"
+    @touchmove="guardHomeScroll"
   >
     <template v-if="!prologueComplete">
       <section
@@ -487,14 +549,21 @@ onBeforeUnmount(() => {
       <div class="article-content">
         <template v-for="(paragraph, index) in contentParagraphs" :key="index">
           <p>{{ paragraph }}</p>
-          <figure v-if="memoryMoment?.insertAfter === index" class="memory-photo">
-            <img
-              :src="memoryMoment.image.url"
-              alt="少年时期的篮球回忆照片"
-              loading="lazy"
-              decoding="async"
-              @load="updateProgress"
-            />
+          <figure v-if="memoryMomentsByPosition[index]" class="memory-photo">
+            <button
+              type="button"
+              class="memory-photo-trigger"
+              aria-label="放大查看这张篮球回忆照片"
+              @click="openMemoryPreview(memoryMomentsByPosition[index].image, $event)"
+            >
+              <img
+                :src="memoryMomentsByPosition[index].image.url"
+                alt="少年时期的篮球回忆照片"
+                loading="lazy"
+                decoding="async"
+                @load="updateProgress"
+              />
+            </button>
             <figcaption><span>MEMORY</span> 那年球场边的我们</figcaption>
           </figure>
         </template>
@@ -535,4 +604,27 @@ onBeforeUnmount(() => {
       </aside>
     </div>
   </main>
+
+  <Teleport to="body">
+    <div
+      v-if="previewImage"
+      class="image-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="篮球回忆照片预览"
+      @click.self="closeMemoryPreview"
+    >
+      <button
+        ref="previewCloseButton"
+        type="button"
+        class="image-lightbox-close"
+        aria-label="关闭图片预览"
+        @click="closeMemoryPreview"
+      >
+        ×
+      </button>
+      <img :src="previewImage.url" alt="放大的少年时期篮球回忆照片" />
+      <p>按 Esc 或点击空白处关闭</p>
+    </div>
+  </Teleport>
 </template>

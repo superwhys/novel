@@ -23,4 +23,4 @@
 
 ## 回忆照片
 
-将 JPG、PNG、WebP、GIF 或 AVIF 图片放入 `internal/memories/images/`，再执行 `make backend` 或 `make build`。构建出的后端二进制已经包含这些图片，运行时不需要额外携带图片目录。阅读器每次打开章节时会随机选择一张，并插入正文中段。
+将 JPG、PNG、WebP、GIF 或 AVIF 图片放入 `internal/memories/images/`，再执行 `make backend` 或 `make build`。构建出的后端二进制已经包含这些图片，运行时不需要额外携带图片目录。阅读器每次打开章节时会随机选择图片，并分散插入正文中段：不足 2500 字显示 1 张，2500～3999 字显示 2 张，4000 字以上显示 3 张；同一章节不重复使用图片，且最多显示 3 张。
