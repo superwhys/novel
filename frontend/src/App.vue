@@ -28,6 +28,8 @@ let homeScrollUnlockTimer
 let previewTrigger = null
 let bodyOverflowBeforePreview = ''
 
+const shownMemoryImagesKey = 'novel:shownMemoryImages'
+
 const memorySlides = [
   {
     kicker: 'PROLOGUE 01 · 落球声',
@@ -171,6 +173,32 @@ function randomInteger(maxExclusive) {
   return Math.floor(Math.random() * maxExclusive)
 }
 
+function readShownMemoryImageIDs() {
+  try {
+    const storedIDs = JSON.parse(localStorage.getItem(shownMemoryImagesKey) || '[]')
+    return new Set(Array.isArray(storedIDs) ? storedIDs.filter(Number.isInteger) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeShownMemoryImageIDs(shownIDs) {
+  try {
+    if (shownIDs.size) localStorage.setItem(shownMemoryImagesKey, JSON.stringify([...shownIDs]))
+    else localStorage.removeItem(shownMemoryImagesKey)
+  } catch {
+    // localStorage 被浏览器禁用时，阅读功能仍可正常使用。
+  }
+}
+
+function resetShownMemoryImageIDs() {
+  try {
+    localStorage.removeItem(shownMemoryImagesKey)
+  } catch {
+    // localStorage 被浏览器禁用时无需处理。
+  }
+}
+
 function chooseMemoryMoments(chapter) {
   const paragraphCount = chapter.content
     .split('\n')
@@ -184,13 +212,36 @@ function chooseMemoryMoments(chapter) {
   const lastPosition = Math.max(firstPosition, Math.min(paragraphCount - 2, Math.ceil(paragraphCount * 0.85)))
   const positionCount = lastPosition - firstPosition + 1
   const imageCount = Math.min(desiredCount, memoryImages.value.length, positionCount)
-  const availableImages = [...memoryImages.value]
+  const validImageIDs = new Set(memoryImages.value.map((image) => image.id))
+  const shownImageIDs = new Set(
+    [...readShownMemoryImageIDs()].filter((imageID) => validImageIDs.has(imageID)),
+  )
+  const selectedImages = []
 
-  return Array.from({ length: imageCount }, (_, slot) => {
+  for (let index = 0; index < imageCount; index += 1) {
+    if (shownImageIDs.size >= memoryImages.value.length) shownImageIDs.clear()
+
+    let candidates = memoryImages.value.filter(
+      (image) => !shownImageIDs.has(image.id) && !selectedImages.some((selected) => selected.id === image.id),
+    )
+    if (!candidates.length) {
+      shownImageIDs.clear()
+      candidates = memoryImages.value.filter(
+        (image) => !selectedImages.some((selected) => selected.id === image.id),
+      )
+    }
+
+    const image = candidates[randomInteger(candidates.length)]
+    selectedImages.push(image)
+    shownImageIDs.add(image.id)
+  }
+
+  if (shownImageIDs.size >= memoryImages.value.length) shownImageIDs.clear()
+  writeShownMemoryImageIDs(shownImageIDs)
+
+  return selectedImages.map((image, slot) => {
     const slotStart = firstPosition + Math.floor((positionCount * slot) / imageCount)
     const slotEnd = firstPosition + Math.floor((positionCount * (slot + 1)) / imageCount) - 1
-    const imageIndex = randomInteger(availableImages.length)
-    const [image] = availableImages.splice(imageIndex, 1)
     return {
       image,
       insertAfter: slotStart + randomInteger(slotEnd - slotStart + 1),
@@ -284,6 +335,7 @@ function toggleTheme() {
 }
 
 onMounted(async () => {
+  resetShownMemoryImageIDs()
   try {
     const payload = await fetchNovel()
     novel.value = payload.novel
