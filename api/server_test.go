@@ -13,7 +13,8 @@ import (
 
 func TestChapterEndpoint(t *testing.T) {
 	lib, err := library.Load(fstest.MapFS{
-		"1.txt": {Data: []byte("第一章 梦想\n这是正文。")},
+		"1.txt":        {Data: []byte("第一章 梦想\n这是正文。")},
+		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +34,8 @@ func TestChapterEndpoint(t *testing.T) {
 
 func TestMissingChapterReturnsNotFound(t *testing.T) {
 	lib, _ := library.Load(fstest.MapFS{
-		"1.txt": {Data: []byte("第一章 梦想\n正文")},
+		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
+		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
 	})
 	recorder := httptest.NewRecorder()
 	New(lib).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/chapters/99", nil))
@@ -44,12 +46,16 @@ func TestMissingChapterReturnsNotFound(t *testing.T) {
 
 func TestNovelListsEmbeddedMemoryImages(t *testing.T) {
 	lib, _ := library.Load(fstest.MapFS{
-		"1.txt": {Data: []byte("第一章 梦想\n正文")},
+		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
+		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
 	})
 	recorder := httptest.NewRecorder()
 	New(lib).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/novel", nil))
 
 	var payload struct {
+		Chapters []struct {
+			Teaser string `json:"teaser"`
+		} `json:"chapters"`
 		MemoryImages []struct {
 			ID  int    `json:"id"`
 			URL string `json:"url"`
@@ -61,11 +67,15 @@ func TestNovelListsEmbeddedMemoryImages(t *testing.T) {
 	if len(payload.MemoryImages) == 0 || payload.MemoryImages[0].URL != "/api/memories/1" {
 		t.Fatalf("memoryImages = %#v", payload.MemoryImages)
 	}
+	if len(payload.Chapters) != 1 || payload.Chapters[0].Teaser != "梦想会从这里开始吗？" {
+		t.Fatalf("chapters = %#v", payload.Chapters)
+	}
 }
 
 func TestEmbeddedMemoryImageEndpoint(t *testing.T) {
 	lib, _ := library.Load(fstest.MapFS{
-		"1.txt": {Data: []byte("第一章 梦想\n正文")},
+		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
+		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
 	})
 	recorder := httptest.NewRecorder()
 	New(lib).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/memories/1", nil))

@@ -19,7 +19,7 @@
 
 ## 运行配置
 
-`config.json` 中的 `server.contentDir` 用于指定小说章节目录，默认值为 `docs/story/content`。目录中的数字命名文本文件（如 `1.txt`）会在服务启动时读取。
+`config.json` 中的 `server.contentDir` 用于指定小说章节目录，默认值为 `docs/story/content`。目录中的数字命名文本文件（如 `1.txt`）会在服务启动时读取；`teasers.json` 按章节编号保存目录页展示的疑问式预告，每个正文都必须有对应预告。
 
 ## 回忆照片
 

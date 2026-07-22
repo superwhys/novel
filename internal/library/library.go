@@ -1,6 +1,7 @@
 package library
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"regexp"
@@ -11,7 +12,14 @@ import (
 	"unicode/utf8"
 )
 
+const chapterTeasersFile = "teasers.json"
+
 var chapterFilePattern = regexp.MustCompile(`^(\d+)\.txt$`)
+
+type chapterCandidate struct {
+	number int
+	name   string
+}
 
 type Novel struct {
 	Title              string `json:"title"`
@@ -29,7 +37,7 @@ type ChapterSummary struct {
 	Number         int    `json:"number"`
 	Title          string `json:"title"`
 	ShortTitle     string `json:"shortTitle"`
-	Excerpt        string `json:"excerpt"`
+	Teaser         string `json:"teaser"`
 	Characters     int    `json:"characters"`
 	Paragraphs     int    `json:"paragraphs"`
 	ReadingMinutes int    `json:"readingMinutes"`
@@ -52,11 +60,7 @@ func Load(contentFS fs.FS) (*Library, error) {
 		return nil, fmt.Errorf("读取小说内容目录: %w", err)
 	}
 
-	type candidate struct {
-		number int
-		name   string
-	}
-	var candidates []candidate
+	var candidates []chapterCandidate
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -66,12 +70,16 @@ func Load(contentFS fs.FS) (*Library, error) {
 			continue
 		}
 		number, _ := strconv.Atoi(match[1])
-		candidates = append(candidates, candidate{number: number, name: entry.Name()})
+		candidates = append(candidates, chapterCandidate{number: number, name: entry.Name()})
 	}
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("小说内容目录中没有找到数字命名的章节文件")
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].number < candidates[j].number })
+	teasers, err := loadChapterTeasers(contentFS, candidates)
+	if err != nil {
+		return nil, err
+	}
 
 	lib := &Library{byID: make(map[int]Chapter)}
 	for _, item := range candidates {
@@ -82,7 +90,7 @@ func Load(contentFS fs.FS) (*Library, error) {
 		if !utf8.Valid(data) {
 			return nil, fmt.Errorf("章节 %s 不是有效的 UTF-8 文本", item.name)
 		}
-		chapter := parseChapter(item.number, string(data))
+		chapter := parseChapter(item.number, string(data), teasers[item.number])
 		lib.chapters = append(lib.chapters, chapter)
 		lib.byID[chapter.ID] = chapter
 	}
@@ -119,7 +127,7 @@ func (l *Library) Chapter(id int) (Chapter, bool) {
 	return chapter, ok
 }
 
-func parseChapter(number int, raw string) Chapter {
+func parseChapter(number int, raw, teaser string) Chapter {
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	raw = strings.TrimSpace(raw)
 	lines := strings.Split(raw, "\n")
@@ -150,13 +158,59 @@ func parseChapter(number int, raw string) Chapter {
 			Number:         number,
 			Title:          title,
 			ShortTitle:     shortTitle,
-			Excerpt:        excerpt(body, 72),
+			Teaser:         teaser,
 			Characters:     characters,
 			Paragraphs:     countParagraphs(body),
 			ReadingMinutes: readingMinutes,
 		},
 		Content: body,
 	}
+}
+
+func loadChapterTeasers(contentFS fs.FS, candidates []chapterCandidate) (map[int]string, error) {
+	data, err := fs.ReadFile(contentFS, chapterTeasersFile)
+	if err != nil {
+		return nil, fmt.Errorf("读取章节预告 %s: %w", chapterTeasersFile, err)
+	}
+	if !utf8.Valid(data) {
+		return nil, fmt.Errorf("章节预告 %s 不是有效的 UTF-8 文本", chapterTeasersFile)
+	}
+
+	var stored map[string]string
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return nil, fmt.Errorf("解析章节预告 %s: %w", chapterTeasersFile, err)
+	}
+
+	chapterNumbers := make(map[int]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		chapterNumbers[candidate.number] = struct{}{}
+	}
+
+	teasers := make(map[int]string, len(stored))
+	for rawNumber, rawTeaser := range stored {
+		number, err := strconv.Atoi(rawNumber)
+		if err != nil || number < 1 {
+			return nil, fmt.Errorf("章节预告 %s 包含无效章节编号 %q", chapterTeasersFile, rawNumber)
+		}
+		if _, ok := chapterNumbers[number]; !ok {
+			return nil, fmt.Errorf("章节预告 %s 中的第%d章没有对应正文", chapterTeasersFile, number)
+		}
+		teaser := strings.TrimSpace(rawTeaser)
+		if teaser == "" {
+			return nil, fmt.Errorf("章节预告 %s 中的第%d章预告为空", chapterTeasersFile, number)
+		}
+		if !strings.HasSuffix(teaser, "？") && !strings.HasSuffix(teaser, "?") {
+			return nil, fmt.Errorf("章节预告 %s 中的第%d章预告必须是疑问句", chapterTeasersFile, number)
+		}
+		teasers[number] = teaser
+	}
+
+	for _, candidate := range candidates {
+		if _, ok := teasers[candidate.number]; !ok {
+			return nil, fmt.Errorf("章节预告 %s 缺少第%d章", chapterTeasersFile, candidate.number)
+		}
+	}
+	return teasers, nil
 }
 
 func normalizeTitle(raw string, number int) string {
@@ -205,15 +259,6 @@ func countParagraphs(text string) int {
 		}
 	}
 	return count
-}
-
-func excerpt(text string, limit int) string {
-	compact := strings.Join(strings.Fields(text), "")
-	runes := []rune(compact)
-	if len(runes) <= limit {
-		return compact
-	}
-	return string(runes[:limit]) + "…"
 }
 
 func chineseNumber(number int) string {

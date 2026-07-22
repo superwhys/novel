@@ -70,7 +70,7 @@ const filteredChapters = computed(() => {
   const keyword = query.value.trim().toLowerCase()
   if (!keyword) return chapters.value
   return chapters.value.filter((chapter) =>
-    `${chapter.title}${chapter.excerpt}`.toLowerCase().includes(keyword),
+    `${chapter.title}${chapter.teaser}`.toLowerCase().includes(keyword),
   )
 })
 
@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
         </div>
         <label class="chapter-search">
           <span aria-hidden="true">⌕</span>
-          <input v-model="query" type="search" placeholder="搜索章节或片段" />
+          <input v-model="query" type="search" placeholder="搜索章节或预告" />
         </label>
       </div>
 
@@ -511,7 +511,7 @@ onBeforeUnmount(() => {
           <span class="chapter-number">{{ String(chapter.number).padStart(2, '0') }}</span>
           <span class="chapter-info">
             <strong>{{ chapter.shortTitle }}</strong>
-            <small>{{ chapter.excerpt }}</small>
+            <small>{{ chapter.teaser }}</small>
           </span>
           <span class="chapter-meta">
             {{ chapter.readingMinutes }} 分钟
