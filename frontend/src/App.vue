@@ -22,9 +22,12 @@ const lineHeight = ref(Number(localStorage.getItem('novel:lineHeight')) || 2)
 const theme = ref(localStorage.getItem('novel:theme') || 'paper')
 const siteShell = ref(null)
 const homeEntry = ref(null)
+const endingPages = ref([])
 const activeMemoryPage = ref(0)
+const activeEndingPage = ref(-1)
 let previewTrigger = null
 let bodyOverflowBeforePreview = ''
+let endingObserver = null
 
 const shownMemoryImagesKey = 'novel:shownMemoryImages'
 
@@ -64,6 +67,45 @@ const memorySlides = [
     quote: '故事没有停在合照那天。它被写进往后的每一次重逢，也写进这一页。',
     caption: '许多年后，篮筐仍在原地等风',
     variant: 'return',
+  },
+]
+
+const endingSlides = [
+  {
+    kicker: 'EPILOGUE 01 · 终场之后',
+    year: '63:62',
+    title: ['冠军是结果，', '不是句号。'],
+    body: '终场哨响，奖杯在七个人手中传了一圈。没有谁独自站在最前面，因为这场胜利，本来就属于每一次传球、卡位与回应。',
+    quote: '真正留下来的，不只是比分，而是他们终于学会怎样一起赢。',
+    caption: '奖杯会被放回学校，那个夜晚留在每个人手中',
+    variant: 'afterglow',
+  },
+  {
+    kicker: 'EPILOGUE 02 · 回到日常',
+    year: 'NEXT DAY',
+    title: ['掌声散去，', '生活仍要接住。'],
+    body: '练习册还要写完，餐馆的碗还要收，发紧的腿仍需如实报告。冠军没有替他们解决生活，却让他们学会承担自己的那一部分。',
+    quote: '有些成长没有掌声，却和决赛里的每一次卡位一样重要。',
+    caption: '第二天，他们回到课桌、餐馆和训练场',
+    variant: 'everyday',
+  },
+  {
+    kicker: 'EPILOGUE 03 · 最后十一秒',
+    year: '00:11',
+    title: ['真正的成长，', '是把球交出去。'],
+    body: '队长没有勉强出手，突破的人看见了夹击，接球的人又找到更好的空位。最后一攻经过每个人，也照见了他们一路走来的距离。',
+    quote: '信任不是把答案喊给所有人，而是在那一刻相信身边的人也看见了。',
+    caption: '最后一球沿着七个少年的信任继续向前',
+    variant: 'final-pass',
+  },
+  {
+    kicker: 'EPILOGUE 04 · 球场就在前面',
+    year: 'ALWAYS',
+    title: ['故事写完了，', '少年还在往前走。'],
+    body: '他们没有在终场哨响后变成完全不同的人，只是更懂得如何面对下一道题、下一次选择，也更懂得怎样一起走向下一块球场。',
+    quote: '篮球场就在前面。七个少年吵吵闹闹地走了过去。',
+    caption: '只要篮球还在落地，那个夏天就仍有回声',
+    variant: 'forward',
   },
 ]
 
@@ -120,6 +162,34 @@ function updateMemoryPage() {
 function scrollToHome() {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   homeEntry.value?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+}
+
+function setEndingPageRef(element, index) {
+  endingPages.value[index] = element || null
+}
+
+function initializeEndingObserver() {
+  endingObserver?.disconnect()
+  endingObserver = null
+  if (!siteShell.value || !('IntersectionObserver' in window)) return
+
+  endingObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+          activeEndingPage.value = Number(entry.target.dataset.endingIndex)
+        }
+      })
+    },
+    { root: siteShell.value, threshold: [0.25, 0.55, 0.8] },
+  )
+
+  endingPages.value.filter(Boolean).forEach((page) => endingObserver.observe(page))
+}
+
+function scrollToEnding() {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  endingPages.value[0]?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
 }
 
 function syncPrologueAnchor() {
@@ -247,6 +317,7 @@ async function loadChapter(id, updateHistory = true) {
   error.value = ''
   directoryOpen.value = false
   try {
+    endingObserver?.disconnect()
     const payload = await fetchChapter(id)
     activeChapter.value = payload.chapter
     memoryMoments.value = chooseMemoryMoments(payload.chapter)
@@ -275,6 +346,7 @@ function closeReader(updateHistory = true) {
     if (!siteShell.value || !homeEntry.value) return
     siteShell.value.scrollTop = homeEntry.value.offsetTop
     activeMemoryPage.value = memorySlides.length
+    initializeEndingObserver()
   })
 }
 
@@ -324,12 +396,14 @@ onMounted(async () => {
   }
   await nextTick()
   syncPrologueAnchor()
+  initializeEndingObserver()
   window.addEventListener('scroll', updateProgress, { passive: true })
   window.addEventListener('popstate', syncFromLocation)
   window.addEventListener('keydown', handlePreviewKeydown)
 })
 
 onBeforeUnmount(() => {
+  endingObserver?.disconnect()
   if (previewImage.value) document.body.style.overflow = bodyOverflowBeforePreview
   window.removeEventListener('scroll', updateProgress)
   window.removeEventListener('popstate', syncFromLocation)
@@ -541,6 +615,80 @@ onBeforeUnmount(() => {
       </div>
       <p v-if="!filteredChapterGroups.length" class="empty-result">没有找到相关章节，换个关键词试试。</p>
     </section>
+
+      <section id="ending-gate" class="ending-gate" aria-labelledby="ending-gate-title">
+        <div class="ending-gate-court" aria-hidden="true"><span></span><i></i></div>
+        <div class="ending-gate-ball" aria-hidden="true"><span></span><i></i></div>
+        <div class="ending-gate-copy">
+          <p>THE STORY CONTINUES AFTER THE LAST PAGE</p>
+          <h2 id="ending-gate-title">故事还没有<br />完全结束。</h2>
+          <span>目录走到了尽头，他们还要继续往前。</span>
+          <button type="button" @click="scrollToEnding">
+            继续向下，看看他们走向哪里 <i aria-hidden="true">⌄</i>
+          </button>
+        </div>
+      </section>
+
+      <section
+        v-for="(slide, index) in endingSlides"
+        :key="slide.kicker"
+        :ref="(element) => setEndingPageRef(element, index)"
+        :id="`ending-${index + 1}`"
+        :data-ending-index="index"
+        :class="[
+          'memory-page',
+          'ending-page',
+          `ending-page--${slide.variant}`,
+          { 'is-active': activeEndingPage === index },
+        ]"
+        :aria-label="`结束章第 ${index + 1} 页，共 ${endingSlides.length} 页`"
+      >
+        <div class="memory-grain" aria-hidden="true"></div>
+        <div class="memory-court" aria-hidden="true"><span></span><i></i></div>
+
+        <div class="memory-copy">
+          <p class="memory-kicker">{{ slide.kicker }}</p>
+          <p class="memory-year" aria-hidden="true">{{ slide.year }}</p>
+          <h1>{{ slide.title[0] }}<br /><em>{{ slide.title[1] }}</em></h1>
+          <p class="memory-body">{{ slide.body }}</p>
+          <blockquote class="memory-quote">{{ slide.quote }}</blockquote>
+        </div>
+
+        <div :class="['ending-illustration', `ending-illustration--${slide.variant}`]" aria-hidden="true">
+          <div class="ending-horizon"></div>
+          <div class="ending-scoreboard"><small>FINAL</small><strong>63</strong><i>:</i><strong>62</strong></div>
+          <div class="ending-trophy"><span></span><i></i></div>
+          <div class="ending-hands">
+            <span v-for="hand in 7" :key="hand"></span>
+          </div>
+
+          <div class="ending-daily ending-daily--desk"><span></span><i></i></div>
+          <div class="ending-daily ending-daily--restaurant"><span></span><i></i></div>
+          <div class="ending-daily ending-daily--training"><span></span><i></i></div>
+
+          <div class="ending-pass-line"></div>
+          <div class="ending-figures">
+            <span v-for="person in 7" :key="person"><i></i></span>
+          </div>
+          <div class="ending-ball"><span></span><i></i></div>
+          <div class="ending-ball-sound ending-ball-sound--one"></div>
+          <div class="ending-ball-sound ending-ball-sound--two"></div>
+          <div class="ending-court-light"></div>
+
+          <p><span>{{ String(index + 1).padStart(2, '0') }} / {{ String(endingSlides.length).padStart(2, '0') }}</span>{{ slide.caption }}</p>
+        </div>
+
+        <div class="memory-page-footer">
+          <div class="memory-dots" aria-hidden="true">
+            <span
+              v-for="(_, dotIndex) in endingSlides"
+              :key="dotIndex"
+              :class="{ active: dotIndex === index }"
+            ></span>
+          </div>
+          <p>{{ index === endingSlides.length - 1 ? '故事至此，回声未完' : '向下滑，继续告别' }} <i>⌄</i></p>
+        </div>
+      </section>
 
       <footer class="site-footer">
         <span class="footer-mark">距</span>
