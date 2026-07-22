@@ -1,0 +1,38 @@
+[
+  {
+    "number": 1,
+    "title": "梦想、短板与失恋",
+    "startChapter": 1,
+    "endChapter": 6
+  },
+  {
+    "number": 2,
+    "title": "班赛中的朋友与对手",
+    "startChapter": 7,
+    "endChapter": 10
+  },
+  {
+    "number": 3,
+    "title": "离开记分牌以后",
+    "startChapter": 11,
+    "endChapter": 14
+  },
+  {
+    "number": 4,
+    "title": "教练暂离与球队重组",
+    "startChapter": 15,
+    "endChapter": 17
+  },
+  {
+    "number": 5,
+    "title": "失利、内讧与重新成为球队",
+    "startChapter": 18,
+    "endChapter": 20
+  },
+  {
+    "number": 6,
+    "title": "区争霸赛与共同答案",
+    "startChapter": 21,
+    "endChapter": 24
+  }
+]

@@ -11,10 +11,13 @@ import (
 	"github.com/superwhys/novel/internal/library"
 )
 
+const testStagesJSON = `[{"number":1,"title":"梦想、短板与失恋","startChapter":1,"endChapter":6}]`
+
 func TestChapterEndpoint(t *testing.T) {
 	lib, err := library.Load(fstest.MapFS{
 		"1.txt":        {Data: []byte("第一章 梦想\n这是正文。")},
 		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
+		"stages.json":  {Data: []byte(testStagesJSON)},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -36,6 +39,7 @@ func TestMissingChapterReturnsNotFound(t *testing.T) {
 	lib, _ := library.Load(fstest.MapFS{
 		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
 		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
+		"stages.json":  {Data: []byte(testStagesJSON)},
 	})
 	recorder := httptest.NewRecorder()
 	New(lib).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/chapters/99", nil))
@@ -48,11 +52,15 @@ func TestNovelListsEmbeddedMemoryImages(t *testing.T) {
 	lib, _ := library.Load(fstest.MapFS{
 		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
 		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
+		"stages.json":  {Data: []byte(testStagesJSON)},
 	})
 	recorder := httptest.NewRecorder()
 	New(lib).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/novel", nil))
 
 	var payload struct {
+		Stages []struct {
+			Title string `json:"title"`
+		} `json:"stages"`
 		Chapters []struct {
 			Teaser string `json:"teaser"`
 		} `json:"chapters"`
@@ -70,12 +78,16 @@ func TestNovelListsEmbeddedMemoryImages(t *testing.T) {
 	if len(payload.Chapters) != 1 || payload.Chapters[0].Teaser != "梦想会从这里开始吗？" {
 		t.Fatalf("chapters = %#v", payload.Chapters)
 	}
+	if len(payload.Stages) != 1 || payload.Stages[0].Title != "梦想、短板与失恋" {
+		t.Fatalf("stages = %#v", payload.Stages)
+	}
 }
 
 func TestEmbeddedMemoryImageEndpoint(t *testing.T) {
 	lib, _ := library.Load(fstest.MapFS{
 		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
 		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
+		"stages.json":  {Data: []byte(testStagesJSON)},
 	})
 	recorder := httptest.NewRecorder()
 	New(lib).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/memories/1", nil))

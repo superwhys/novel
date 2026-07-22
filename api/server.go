@@ -40,9 +40,10 @@ func (a *API) health(w http.ResponseWriter, _ *http.Request) {
 func (a *API) novel(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Novel        library.Novel            `json:"novel"`
+		Stages       []library.ChapterStage   `json:"stages"`
 		Chapters     []library.ChapterSummary `json:"chapters"`
 		MemoryImages []memories.Image         `json:"memoryImages"`
-	}{a.library.Novel(), a.library.Chapters(), memories.Images("/api")})
+	}{a.library.Novel(), a.library.Stages(), a.library.Chapters(), memories.Images("/api")})
 }
 
 func (a *API) chapters(w http.ResponseWriter, _ *http.Request) {

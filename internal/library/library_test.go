@@ -8,11 +8,14 @@ import (
 	"testing/fstest"
 )
 
+const testStagesJSON = `[{"number":1,"title":"起步","startChapter":1,"endChapter":2}]`
+
 func TestLoadSortsAndParsesChapters(t *testing.T) {
 	contentFS := fstest.MapFS{
 		"2.txt":        {Data: []byte("第二章 挑战\n第二章的正文。\n又一段。")},
 		"1.txt":        {Data: []byte("第一章梦想\n第一章的正文。")},
 		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？","2":"他们能接下挑战吗？"}`)},
+		"stages.json":  {Data: []byte(testStagesJSON)},
 	}
 
 	lib, err := Load(contentFS)
@@ -31,6 +34,21 @@ func TestLoadSortsAndParsesChapters(t *testing.T) {
 	}
 	if chapters[1].Paragraphs != 2 {
 		t.Fatalf("paragraphs = %d, want 2", chapters[1].Paragraphs)
+	}
+	stages := lib.Stages()
+	if len(stages) != 1 || stages[0].Title != "起步" {
+		t.Fatalf("stages = %#v", stages)
+	}
+}
+
+func TestLoadRejectsChapterOutsideStages(t *testing.T) {
+	_, err := Load(fstest.MapFS{
+		"1.txt":        {Data: []byte("第一章 梦想\n正文")},
+		"teasers.json": {Data: []byte(`{"1":"梦想会从这里开始吗？"}`)},
+		"stages.json":  {Data: []byte(`[{"number":2,"title":"后来","startChapter":2,"endChapter":3}]`)},
+	})
+	if err == nil || !strings.Contains(err.Error(), "没有覆盖第1章") {
+		t.Fatalf("Load() error = %v, want uncovered chapter error", err)
 	}
 }
 

@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { fetchChapter, fetchNovel } from './api'
 
 const novel = ref(null)
+const stages = ref([])
 const chapters = ref([])
 const memoryImages = ref([])
 const activeChapter = ref(null)
@@ -66,12 +67,18 @@ const memorySlides = [
   },
 ]
 
-const filteredChapters = computed(() => {
+const filteredChapterGroups = computed(() => {
   const keyword = query.value.trim().toLowerCase()
-  if (!keyword) return chapters.value
-  return chapters.value.filter((chapter) =>
-    `${chapter.title}${chapter.teaser}`.toLowerCase().includes(keyword),
-  )
+  return stages.value
+    .map((stage) => {
+      const stageMatches = stage.title.toLowerCase().includes(keyword)
+      const stageChapters = chapters.value.filter((chapter) => {
+        if (chapter.number < stage.startChapter || chapter.number > stage.endChapter) return false
+        return !keyword || stageMatches || `${chapter.title}${chapter.teaser}`.toLowerCase().includes(keyword)
+      })
+      return { ...stage, chapters: stageChapters }
+    })
+    .filter((stage) => stage.chapters.length)
 })
 
 const contentParagraphs = computed(() =>
@@ -306,6 +313,7 @@ onMounted(async () => {
   try {
     const payload = await fetchNovel()
     novel.value = payload.novel
+    stages.value = payload.stages || []
     chapters.value = payload.chapters
     memoryImages.value = payload.memoryImages || []
     syncFromLocation()
@@ -501,25 +509,37 @@ onBeforeUnmount(() => {
 
       <div v-if="error" class="inline-error">{{ error }}</div>
 
-      <div class="chapter-list">
-        <button
-          v-for="chapter in filteredChapters"
-          :key="chapter.id"
-          class="chapter-card"
-          @click="loadChapter(chapter.id)"
-        >
-          <span class="chapter-number">{{ String(chapter.number).padStart(2, '0') }}</span>
-          <span class="chapter-info">
-            <strong>{{ chapter.shortTitle }}</strong>
-            <small>{{ chapter.teaser }}</small>
-          </span>
-          <span class="chapter-meta">
-            {{ chapter.readingMinutes }} 分钟
-            <i>↗</i>
-          </span>
-        </button>
+      <div class="chapter-stages">
+        <section v-for="stage in filteredChapterGroups" :key="stage.number" class="chapter-stage">
+          <header class="chapter-stage-header">
+            <div>
+              <p>STAGE {{ String(stage.number).padStart(2, '0') }}</p>
+              <h3>{{ stage.title }}</h3>
+            </div>
+            <span>第 {{ stage.startChapter }}—{{ stage.endChapter }} 章</span>
+          </header>
+
+          <div class="chapter-list">
+            <button
+              v-for="chapter in stage.chapters"
+              :key="chapter.id"
+              class="chapter-card"
+              @click="loadChapter(chapter.id)"
+            >
+              <span class="chapter-number">{{ String(chapter.number).padStart(2, '0') }}</span>
+              <span class="chapter-info">
+                <strong>{{ chapter.shortTitle }}</strong>
+                <small>{{ chapter.teaser }}</small>
+              </span>
+              <span class="chapter-meta">
+                {{ chapter.readingMinutes }} 分钟
+                <i>↗</i>
+              </span>
+            </button>
+          </div>
+        </section>
       </div>
-      <p v-if="!filteredChapters.length" class="empty-result">没有找到相关章节，换个关键词试试。</p>
+      <p v-if="!filteredChapterGroups.length" class="empty-result">没有找到相关章节，换个关键词试试。</p>
     </section>
 
       <footer class="site-footer">

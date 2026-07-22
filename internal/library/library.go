@@ -12,7 +12,10 @@ import (
 	"unicode/utf8"
 )
 
-const chapterTeasersFile = "teasers.json"
+const (
+	chapterTeasersFile = "teasers.json"
+	chapterStagesFile  = "stages.json"
+)
 
 var chapterFilePattern = regexp.MustCompile(`^(\d+)\.txt$`)
 
@@ -43,6 +46,13 @@ type ChapterSummary struct {
 	ReadingMinutes int    `json:"readingMinutes"`
 }
 
+type ChapterStage struct {
+	Number       int    `json:"number"`
+	Title        string `json:"title"`
+	StartChapter int    `json:"startChapter"`
+	EndChapter   int    `json:"endChapter"`
+}
+
 type Chapter struct {
 	ChapterSummary
 	Content string `json:"content"`
@@ -50,6 +60,7 @@ type Chapter struct {
 
 type Library struct {
 	novel    Novel
+	stages   []ChapterStage
 	chapters []Chapter
 	byID     map[int]Chapter
 }
@@ -80,8 +91,12 @@ func Load(contentFS fs.FS) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
+	stages, err := loadChapterStages(contentFS, candidates)
+	if err != nil {
+		return nil, err
+	}
 
-	lib := &Library{byID: make(map[int]Chapter)}
+	lib := &Library{stages: stages, byID: make(map[int]Chapter)}
 	for _, item := range candidates {
 		data, err := fs.ReadFile(contentFS, item.name)
 		if err != nil {
@@ -120,6 +135,10 @@ func (l *Library) Chapters() []ChapterSummary {
 		result = append(result, chapter.ChapterSummary)
 	}
 	return result
+}
+
+func (l *Library) Stages() []ChapterStage {
+	return append([]ChapterStage(nil), l.stages...)
 }
 
 func (l *Library) Chapter(id int) (Chapter, bool) {
@@ -211,6 +230,59 @@ func loadChapterTeasers(contentFS fs.FS, candidates []chapterCandidate) (map[int
 		}
 	}
 	return teasers, nil
+}
+
+func loadChapterStages(contentFS fs.FS, candidates []chapterCandidate) ([]ChapterStage, error) {
+	data, err := fs.ReadFile(contentFS, chapterStagesFile)
+	if err != nil {
+		return nil, fmt.Errorf("读取章节阶段 %s: %w", chapterStagesFile, err)
+	}
+	if !utf8.Valid(data) {
+		return nil, fmt.Errorf("章节阶段 %s 不是有效的 UTF-8 文本", chapterStagesFile)
+	}
+
+	var stages []ChapterStage
+	if err := json.Unmarshal(data, &stages); err != nil {
+		return nil, fmt.Errorf("解析章节阶段 %s: %w", chapterStagesFile, err)
+	}
+	if len(stages) == 0 {
+		return nil, fmt.Errorf("章节阶段 %s 不能为空", chapterStagesFile)
+	}
+
+	seenNumbers := make(map[int]struct{}, len(stages))
+	for index := range stages {
+		stage := &stages[index]
+		stage.Title = strings.TrimSpace(stage.Title)
+		if stage.Number < 1 || stage.Title == "" || stage.StartChapter < 1 || stage.EndChapter < stage.StartChapter {
+			return nil, fmt.Errorf("章节阶段 %s 中的第%d项无效", chapterStagesFile, index+1)
+		}
+		if _, ok := seenNumbers[stage.Number]; ok {
+			return nil, fmt.Errorf("章节阶段 %s 中的阶段编号 %d 重复", chapterStagesFile, stage.Number)
+		}
+		seenNumbers[stage.Number] = struct{}{}
+		for previousIndex := 0; previousIndex < index; previousIndex++ {
+			previous := stages[previousIndex]
+			if stage.StartChapter <= previous.EndChapter && previous.StartChapter <= stage.EndChapter {
+				return nil, fmt.Errorf("章节阶段 %s 中的阶段 %d 与阶段 %d 范围重叠", chapterStagesFile, previous.Number, stage.Number)
+			}
+		}
+	}
+
+	for _, candidate := range candidates {
+		covered := false
+		for _, stage := range stages {
+			if candidate.number >= stage.StartChapter && candidate.number <= stage.EndChapter {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return nil, fmt.Errorf("章节阶段 %s 没有覆盖第%d章", chapterStagesFile, candidate.number)
+		}
+	}
+
+	sort.Slice(stages, func(i, j int) bool { return stages[i].Number < stages[j].Number })
+	return stages, nil
 }
 
 func normalizeTitle(raw string, number int) string {
