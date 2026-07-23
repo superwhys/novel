@@ -614,6 +614,15 @@ onBeforeUnmount(() => {
         </section>
       </div>
       <p v-if="!filteredChapterGroups.length" class="empty-result">没有找到相关章节，换个关键词试试。</p>
+
+      <a href="#ending-gate" class="chapters-ending-cue" aria-label="继续向下，进入结束章">
+        <span class="chapters-ending-copy">
+          <small>EPILOGUE AHEAD</small>
+          <strong>目录读完了，故事还没结束。</strong>
+          <span>继续向下，进入结束章</span>
+        </span>
+        <i aria-hidden="true">⌄</i>
+      </a>
     </section>
 
       <section id="ending-gate" class="ending-gate" aria-labelledby="ending-gate-title">
