@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="篮球与书页图标">
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#102d26"/>
+  <path
+    d="M64 242c66-10 130 10 192 62v132c-56-48-120-68-192-58V242Z"
+    fill="#f3f0e8"
+  />
+  <path
+    d="M448 242c-66-10-130 10-192 62v132c56-48 120-68 192-58V242Z"
+    fill="#f3f0e8"
+  />
+  <path d="M256 304v132" fill="none" stroke="#d8d0c0" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="256" cy="206" r="116" fill="#f17837" stroke="#f3f0e8" stroke-width="14"/>
+  <path
+    d="M256 90c-42 42-64 80-64 116s22 74 64 116M256 90c42 42 64 80 64 116s-22 74-64 116M142 187c76 26 152 26 228 0M151 255c70-24 140-24 210 0"
+    fill="none"
+    stroke="#71351c"
+    stroke-width="14"
+    stroke-linecap="round"
+  />
+</svg>
