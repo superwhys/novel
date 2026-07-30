@@ -81,6 +81,7 @@ fi
 if ! "${SUDO[@]}" test -f "${EXTRACT_DIR}/novel" || \
 	! "${SUDO[@]}" test -d "${EXTRACT_DIR}/docs/story/content" || \
 	! "${SUDO[@]}" test -f "${EXTRACT_DIR}/frontend/dist/index.html" || \
+	! "${SUDO[@]}" test -f "${EXTRACT_DIR}/frontend/dist/favicon.ico" || \
 	! "${SUDO[@]}" test -d "${EXTRACT_DIR}/frontend/dist/assets"; then
 	echo "错误：发布包内容不完整，已取消部署。" >&2
 	exit 1
@@ -91,10 +92,8 @@ fi
 	"${BACKEND_STAGING_DIR}/docs/story/content"
 "${SUDO[@]}" cp "${REMOTE_DIR}/config.json" "${BACKEND_STAGING_DIR}/config.json"
 "${SUDO[@]}" chmod 755 "${BACKEND_STAGING_DIR}/novel"
-"${SUDO[@]}" cp "${EXTRACT_DIR}/frontend/dist/index.html" \
-	"${FRONTEND_STAGING_DIR}/index.html"
-"${SUDO[@]}" cp -R "${EXTRACT_DIR}/frontend/dist/assets" \
-	"${FRONTEND_STAGING_DIR}/assets"
+"${SUDO[@]}" cp -R "${EXTRACT_DIR}/frontend/dist/." \
+	"${FRONTEND_STAGING_DIR}/"
 
 "${SUDO[@]}" systemctl stop "${SERVICE_NAME}"
 
