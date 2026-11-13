@@ -109,12 +109,22 @@ const endingSlides = [
   },
 ]
 
+const extraStage = computed(() => stages.value.find((stage) => stage.title.includes('番外')) || null)
+const extraStartChapter = computed(() => extraStage.value?.startChapter || Number.POSITIVE_INFINITY)
+const mainChapters = computed(() =>
+  chapters.value.filter((chapter) => chapter.number < extraStartChapter.value),
+)
+const extraChapters = computed(() =>
+  chapters.value.filter((chapter) => chapter.number >= extraStartChapter.value),
+)
+
 const filteredChapterGroups = computed(() => {
   const keyword = query.value.trim().toLowerCase()
   return stages.value
+    .filter((stage) => stage.endChapter < extraStartChapter.value)
     .map((stage) => {
       const stageMatches = stage.title.toLowerCase().includes(keyword)
-      const stageChapters = chapters.value.filter((chapter) => {
+      const stageChapters = mainChapters.value.filter((chapter) => {
         if (chapter.number < stage.startChapter || chapter.number > stage.endChapter) return false
         return !keyword || stageMatches || `${chapter.title}${chapter.teaser}`.toLowerCase().includes(keyword)
       })
@@ -134,12 +144,18 @@ const memoryMomentsByPosition = computed(() =>
   Object.fromEntries(memoryMoments.value.map((moment) => [moment.insertAfter, moment])),
 )
 
+const isExtraChapter = computed(() => activeChapter.value?.number >= extraStartChapter.value)
+const readingChapters = computed(() => (isExtraChapter.value ? extraChapters.value : mainChapters.value))
 const currentIndex = computed(() =>
-  chapters.value.findIndex((chapter) => chapter.id === activeChapter.value?.id),
+  readingChapters.value.findIndex((chapter) => chapter.id === activeChapter.value?.id),
 )
 
-const previousChapter = computed(() => chapters.value[currentIndex.value - 1] || null)
-const nextChapter = computed(() => chapters.value[currentIndex.value + 1] || null)
+const previousChapter = computed(() => readingChapters.value[currentIndex.value - 1] || null)
+const nextChapter = computed(() => readingChapters.value[currentIndex.value + 1] || null)
+const isMainStoryFinale = computed(
+  () => extraChapters.value.length > 0 && activeChapter.value?.id === mainChapters.value.at(-1)?.id,
+)
+const drawerChapters = computed(() => (isExtraChapter.value ? extraChapters.value : mainChapters.value))
 const savedChapter = computed(() => chapters.value.find((chapter) => chapter.id === lastChapterID.value))
 
 function formatCharacters(value) {
@@ -190,6 +206,24 @@ function initializeEndingObserver() {
 function scrollToEnding() {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   endingPages.value[0]?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+}
+
+function openEndingFromReader() {
+  activeChapter.value = null
+  memoryMoments.value = []
+  directoryOpen.value = false
+  window.history.pushState({}, '', '#ending-gate')
+  nextTick(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+    if (!siteShell.value) return
+    const endingGate = document.getElementById('ending-gate')
+    if (endingGate) {
+      const shellTop = siteShell.value.getBoundingClientRect().top
+      siteShell.value.scrollTop += endingGate.getBoundingClientRect().top - shellTop
+    }
+    activeMemoryPage.value = memorySlides.length
+    initializeEndingObserver()
+  })
 }
 
 function syncPrologueAnchor() {
@@ -337,14 +371,21 @@ async function loadChapter(id, updateHistory = true) {
 }
 
 function closeReader(updateHistory = true) {
+  const returnToExtras = isExtraChapter.value
   activeChapter.value = null
   memoryMoments.value = []
   directoryOpen.value = false
-  if (updateHistory) window.history.pushState({}, '', window.location.pathname)
+  if (updateHistory) {
+    window.history.pushState({}, '', returnToExtras ? '#extras' : window.location.pathname)
+  }
   nextTick(() => {
     window.scrollTo({ top: 0, behavior: 'instant' })
     if (!siteShell.value || !homeEntry.value) return
-    siteShell.value.scrollTop = homeEntry.value.offsetTop
+    const target = returnToExtras ? document.getElementById('extras') : homeEntry.value
+    if (target) {
+      const shellTop = siteShell.value.getBoundingClientRect().top
+      siteShell.value.scrollTop += target.getBoundingClientRect().top - shellTop
+    }
     activeMemoryPage.value = memorySlides.length
     initializeEndingObserver()
   })
@@ -353,7 +394,10 @@ function closeReader(updateHistory = true) {
 function syncFromLocation() {
   const match = window.location.hash.match(/^#chapter-(\d+)$/)
   if (match) loadChapter(Number(match[1]), false)
-  else closeReader(false)
+  else {
+    closeReader(false)
+    nextTick(syncPrologueAnchor)
+  }
 }
 
 function updateProgress() {
@@ -695,7 +739,32 @@ onBeforeUnmount(() => {
               :class="{ active: dotIndex === index }"
             ></span>
           </div>
-          <p>{{ index === endingSlides.length - 1 ? '故事至此，回声未完' : '向下滑，继续告别' }} <i>⌄</i></p>
+          <p>{{ index === endingSlides.length - 1 ? (extraChapters.length ? '向下翻，进入番外篇' : '故事至此，回声未完') : '向下滑，继续告别' }} <i>⌄</i></p>
+        </div>
+      </section>
+
+      <section v-if="extraChapters.length" id="extras" class="extras-section" aria-labelledby="extras-title">
+        <div class="extras-court" aria-hidden="true"><span></span><i></i></div>
+        <div class="extras-inner">
+          <header class="extras-heading">
+            <p>EXTRA STORIES / 番外篇</p>
+            <h2 id="extras-title">终场翻过去，<br /><em>还有几页。</em></h2>
+            <span>有些故事发生在相识以前，有些发生在长大以后。</span>
+          </header>
+
+          <div class="extras-list">
+            <button
+              v-for="(chapter, index) in extraChapters"
+              :key="chapter.id"
+              class="extra-card"
+              @click="loadChapter(chapter.id)"
+            >
+              <span class="extra-card-index">EXTRA {{ String(index + 1).padStart(2, '0') }}</span>
+              <strong>{{ chapter.shortTitle }}</strong>
+              <small>{{ chapter.teaser }}</small>
+              <span class="extra-card-meta">{{ chapter.readingMinutes }} 分钟 <i aria-hidden="true">↗</i></span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -763,25 +832,29 @@ onBeforeUnmount(() => {
       </div>
       <nav class="chapter-navigation" aria-label="章节切换">
         <button :disabled="!previousChapter" @click="previousChapter && loadChapter(previousChapter.id)">
-          <small>← 上一章</small>
-          <strong>{{ previousChapter?.shortTitle || '已经是第一章' }}</strong>
+          <small>{{ isExtraChapter ? '← 上一篇番外' : '← 上一章' }}</small>
+          <strong>{{ previousChapter?.shortTitle || (isExtraChapter ? '已经是第一篇' : '已经是第一章') }}</strong>
         </button>
-        <button class="next" :disabled="!nextChapter" @click="nextChapter && loadChapter(nextChapter.id)">
-          <small>下一章 →</small>
-          <strong>{{ nextChapter?.shortTitle || '未完待续' }}</strong>
+        <button v-if="isMainStoryFinale" class="next ending-next" @click="openEndingFromReader">
+          <small>终章之后 →</small>
+          <strong>翻过结束章</strong>
+        </button>
+        <button v-else class="next" :disabled="!nextChapter" @click="nextChapter && loadChapter(nextChapter.id)">
+          <small>{{ isExtraChapter ? '下一篇番外 →' : '下一章 →' }}</small>
+          <strong>{{ nextChapter?.shortTitle || (isExtraChapter ? '番外完' : '未完待续') }}</strong>
         </button>
       </nav>
     </article>
 
     <div v-if="directoryOpen" class="drawer-backdrop" @click.self="directoryOpen = false">
-      <aside class="directory-drawer" aria-label="章节目录">
+      <aside class="directory-drawer" :aria-label="isExtraChapter ? '番外目录' : '章节目录'">
         <div class="drawer-heading">
-          <div><small>TABLE OF CONTENTS</small><h2>章节目录</h2></div>
+          <div><small>TABLE OF CONTENTS</small><h2>{{ isExtraChapter ? '番外目录' : '章节目录' }}</h2></div>
           <button aria-label="关闭目录" @click="directoryOpen = false">×</button>
         </div>
         <div class="drawer-list">
           <button
-            v-for="chapter in chapters"
+            v-for="chapter in drawerChapters"
             :key="chapter.id"
             :class="{ active: chapter.id === activeChapter.id }"
             @click="loadChapter(chapter.id)"
